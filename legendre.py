@@ -1,33 +1,10 @@
 import boto3
 import requests
 from itertools import chain
-
-app_status_resources = {
-  'production': {
-    'frontend': 'http://lb-internal.prod.example.com:3000/api/status',
-    'backend-thing': 'http://lb-internal.prod.example.com:4040/private/status',
-    'other-backend-thing': 'http://lb-internal.prod.example.com:3030/private/status',
-  },
-  'staging': {
-    'frontend': 'http://lb-internal.stg.example.com:3000/api/status',
-    'backend-thing': 'http://lb-internal.stg.example.com:4040/private/status',
-    'other-backend-thing': 'http://lb-internal.stg.example.com:3030/private/status',
-  },
-  'dogfood': {
-    'frontend': 'http://lb-internal.dog.example.com:3000/api/status',
-    'backend-thing': 'http://lb-internal.dog.example.com:4040/private/status',
-    'other-backend-thing': 'http://lb-internal.dog.example.com:3030/private/status',
-  },
-}
+from custom import get_expected_sha, app_status_resources, notify_sns_topic_name
 
 client = boto3.client('ec2')
-
-# Modify this function to get the live version from your running apps
-def get_expected_sha(tier, app_name):
-  status_resource = app_status_resources[tier][app_name]
-  r = requests.get(status_resource)
-  resp = r.json()
-  return resp['version']
+sns_client = boto3.client('sns')
 
 def find_instances():
   response = client.describe_instances(
@@ -77,10 +54,14 @@ def find_stale_app_instances(tier, app_name):
 
 def problematic_instances():
   yield find_unnamed_instances()
-  for tier in ['production', 'staging', 'dogfood']:
-    for app in ['gonfalon', 'event-recorder', 'attribute-recorder']:
+  for tier, apps in app_status_resources.iteritems():
+    for app in apps:
       yield find_stale_app_instances(tier, app)
 
-for i in chain.from_iterable(problematic_instances()):
-  print i['InstanceId'], i.get('Tags')
-  
+def notify_zombie(instance):
+  arn = sns_client.create_topic(Name=notify_sns_topic_name)['TopicArn']
+  sns_client.publish(TopicArn=arn, Message="Found zombie instance {}: {}".format(instance['InstanceId'], instance.get('Tags')))
+
+def handler(event, context):
+  for i in chain.from_iterable(problematic_instances()):
+    notify_zombie(i)

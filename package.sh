@@ -6,4 +6,4 @@ rm legendre.zip
 cp *.py dist
 pip install -r requirements.txt -t dist
 
-(cd dist && zip ../legendre *)
+(cd dist && zip -r ../legendre *)
