@@ -1,7 +1,12 @@
 import boto3
 import requests
+import json
 from itertools import chain
 from custom import get_expected_sha, app_status_resources, notify_sns_topic_name
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 client = boto3.client('ec2')
 sns_client = boto3.client('sns')
@@ -16,6 +21,7 @@ def find_instances():
       yield i
 
 def find_unnamed_instances():
+  logger.info('looking for unnamed instances')
   for i in find_instances():
     has_name = False
     for t in i.get('Tags', []):
@@ -25,6 +31,7 @@ def find_unnamed_instances():
       yield i
 
 def find_stale_app_instances(tier, app_name):
+  logger.info('looking for stale app instances')
   expected_sha = get_expected_sha(tier, app_name)
   response = client.describe_instances(
     DryRun=False,
@@ -60,8 +67,10 @@ def problematic_instances():
 
 def notify_zombie(instance):
   arn = sns_client.create_topic(Name=notify_sns_topic_name)['TopicArn']
-  sns_client.publish(TopicArn=arn, Message="Found zombie instance {}: {}".format(instance['InstanceId'], instance.get('Tags')))
+  tags = instance.get('Tags', {})
+  sns_client.publish(TopicArn=arn, Message="Found zombie instance {}. Tags: {}".format(instance['InstanceId'], json.dumps(tags)))
 
 def handler(event, context):
   for i in chain.from_iterable(problematic_instances()):
+    logger.warn('found zombie instance: {}'.format(i))
     notify_zombie(i)
