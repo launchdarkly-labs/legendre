@@ -63,13 +63,13 @@ def upload_function():
   # You can't actually set up a schedule for lamda functions via the API :(
   # http://docs.aws.amazon.com/lambda/latest/dg/intro-core-components.html#intro-core-components-event-sources
   # grep for 'there is no AWS Lambda API to configure this mapping'
-  # rule = events_client.put_rule(
-  #   Name='FindZombieInstancesSchedule',
-  #   ScheduleExpression='rate(5 minutes)',
-  #   State='ENABLED',
-  #   Description='Run the zombie instance detector on a schedule',
-  #   RoleArn=role.arn,
-  # )
+  rule = events_client.put_rule(
+    Name='FindZombieInstancesSchedule',
+    ScheduleExpression='rate(1 hour)',
+    State='ENABLED',
+    Description='Run the zombie instance detector on a schedule',
+    # RoleArn=role.arn,
+  )
 
   with open('{}/../legendre.zip'.format(base_dir), 'rb') as zip_file:
     zip_bytes = zip_file.read()
@@ -99,13 +99,21 @@ def upload_function():
       else:
         raise e
 
-    # events_client.put_targets(
-    #   Rule='FindZombieInstancesSchedule',
-    #   Targets=[
-    #     { 'Id': 'FindZombieInstances-schedule',
-    #       'Arn': '{}:$LATEST'.format(func['FunctionArn']),
-    #     }
-    #   ]
-    # )
+    lambda_client.add_permission(
+      FunctionName='FindZombieInstances',
+      StatementId='FindZombieInstancesSchedule-Permission',
+      Action='lambda:InvokeFunction',
+      Principal='events.amazonaws.com',
+      SourceArn=rule['RuleArn'],
+    )
+
+    events_client.put_targets(
+      Rule='FindZombieInstancesSchedule',
+      Targets=[
+        { 'Id': 'FindZombieInstances-schedule',
+          'Arn': func['FunctionArn'],
+        }
+      ]
+    )
 
 upload_function()
