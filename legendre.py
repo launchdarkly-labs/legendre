@@ -14,7 +14,12 @@ sns_client = boto3.client('sns')
 def find_instances():
   response = client.describe_instances(
     DryRun=False,
-    Filters=[],
+    Filters=[
+      {
+        'Name': 'instance-state-name',
+        'Values': ['running'],
+      },
+    ],
   )
   for r in response['Reservations']:
     for i in r['Instances']:
@@ -36,6 +41,10 @@ def find_stale_app_instances(tier, app_name):
   response = client.describe_instances(
     DryRun=False,
     Filters=[
+      {
+        'Name': 'instance-state-name',
+        'Values': ['running'],
+      },
       {
         'Name': 'tag:tier',
         'Values': [

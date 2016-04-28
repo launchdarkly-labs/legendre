@@ -95,13 +95,18 @@ def upload_function():
       else:
         raise e
 
-    lambda_client.add_permission(
-      FunctionName='FindZombieInstances',
-      StatementId='FindZombieInstancesSchedule-Permission',
-      Action='lambda:InvokeFunction',
-      Principal='events.amazonaws.com',
-      SourceArn=rule['RuleArn'],
-    )
+    try:
+      lambda_client.add_permission(
+        FunctionName='FindZombieInstances',
+        StatementId='FindZombieInstancesSchedule-Permission',
+        Action='lambda:InvokeFunction',
+        Principal='events.amazonaws.com',
+        SourceArn=rule['RuleArn'],
+      )
+    except ClientError as e:
+      if e.response['Error']['Code'] != 'ResourceConflictException':
+        # ignore conflicts if the rule exists
+        raise e
 
     events_client.put_targets(
       Rule='FindZombieInstancesSchedule',
